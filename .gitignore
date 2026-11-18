@@ -221,3 +221,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# Data (too large for GitHub; we'll track it with DVC later)
+data/**/*.csv
+data/**/*.parquet
+data/**/*.zip
+
+# Secrets
+kaggle.json
