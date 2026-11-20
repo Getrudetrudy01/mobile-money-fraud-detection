@@ -1,4 +1,4 @@
-.PHONY: data features train mlflow-ui test
+.PHONY: data features train mlflow-ui serve test
 
 data:
 	python -m src.data.clean
@@ -14,3 +14,6 @@ test:
 
 mlflow-ui:
 	mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5000
+
+serve:
+	uvicorn src.serving.app:app --reload --port 8000
