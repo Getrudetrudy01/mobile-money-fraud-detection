@@ -1,4 +1,4 @@
-.PHONY: data features train mlflow-ui serve test
+.PHONY: data features train mlflow-ui serve monitor test
 
 data:
 	python -m src.data.clean
@@ -8,6 +8,9 @@ features:
 
 train:
 	python -m src.models.train
+
+monitor:
+	python -m src.monitoring.monitor
 
 test:
 	pytest -v

@@ -31,3 +31,10 @@ training:
   mlflow:
     tracking_uri: sqlite:///mlflow.db
     experiment: fraud-detection
+
+monitoring:
+  psi_bins: 10
+  psi_threshold: 0.25
+  consecutive_days: 3
+  reference_sample: 200000
+  report_dir: reports

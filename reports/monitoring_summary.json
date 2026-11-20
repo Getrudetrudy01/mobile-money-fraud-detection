@@ -1,0 +1,15 @@
+{
+  "model_version": "20261120-151850",
+  "days_monitored": 16,
+  "days_with_drift": 16,
+  "most_drifted_features": {
+    "day_of_week": 9.169,
+    "takes_full_balance": 8.597,
+    "amount_to_balance": 7.047,
+    "hour": 5.316,
+    "dest_hours_since_last": 4.611
+  },
+  "reference_alert_rate": 0.001925,
+  "production_alert_rate": 0.009797170632013076,
+  "retrain_recommended": true
+}
