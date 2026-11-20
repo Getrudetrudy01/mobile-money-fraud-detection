@@ -8,3 +8,22 @@ features:
   input_path: data/clean/transactions.parquet
   output_path: data/features/features.parquet
   night_hours: [0, 1, 2, 3, 4, 5, 6, 7]
+
+
+training:
+  features_path: data/features/features.parquet
+  train_frac: 0.70
+  val_frac: 0.15
+  metrics_path: reports/metrics.json
+  model_path: models/lightgbm_realistic.joblib
+  lightgbm:
+    n_estimators: 2000
+    learning_rate: 0.05
+    num_leaves: 63
+    min_child_samples: 50
+    subsample: 0.8
+    subsample_freq: 1
+    colsample_bytree: 0.8
+    metric: average_precision
+    random_state: 42
+    verbose: -1

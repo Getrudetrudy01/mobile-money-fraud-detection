@@ -230,3 +230,6 @@ data/**/*.zip
 
 # Secrets
 kaggle.json
+
+models/
+
