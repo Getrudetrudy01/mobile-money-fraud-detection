@@ -38,3 +38,6 @@ monitoring:
   consecutive_days: 3
   reference_sample: 200000
   report_dir: reports
+  reference: validation        # compare against the most recent known-good period
+  exclude_features: [day_of_week]
+  min_volume_ratio: 0.5        # flag days with less than half the normal volume

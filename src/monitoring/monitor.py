@@ -48,14 +48,18 @@ def main() -> None:
     report_dir.mkdir(parents=True, exist_ok=True)
 
     df = pd.read_parquet(PROJECT_ROOT / tcfg["features_path"])
-    train, _, production = time_split(df, tcfg["train_frac"], tcfg["val_frac"])
+
+    # A random sample of training data is enough to describe "normal" and is much faster    
+    train, val, production = time_split(df, tcfg["train_frac"], tcfg["val_frac"])
     production = production.assign(day=production["step"] // 24)
 
-    # A random sample of training data is enough to describe "normal" and is much faster
-    reference = train.sample(n=min(len(train), mcfg["reference_sample"]), random_state=42)
+    pool = val if mcfg["reference"] == "validation" else train
+    reference = pool.sample(n=min(len(pool), mcfg["reference_sample"]), random_state=42)
+    monitored = [f for f in REALISTIC_FEATURES if f not in mcfg["exclude_features"]]
+    normal_daily_volume = len(pool) / pool["step"].floordiv(24).nunique()
 
     # 1. Data drift
-    drift = daily_drift(reference, production, REALISTIC_FEATURES, mcfg["psi_bins"])
+    drift = daily_drift(reference, production, monitored, mcfg["psi_bins"])
 
     # 2. Prediction drift: how often does the model raise alerts each day?
     model_path = PROJECT_ROOT / tcfg["model_path"]
@@ -70,13 +74,14 @@ def main() -> None:
 
     # Which features drifted each day?
     threshold = mcfg["psi_threshold"]
-    report["drifted"] = report[REALISTIC_FEATURES].apply(
-        lambda row: [f for f in REALISTIC_FEATURES if row[f] > threshold], axis=1)
+    report["drifted"] = report[monitored].apply(
+        lambda row: [f for f in monitored if row[f] > threshold], axis=1)
     report["n_drifted"] = report["drifted"].str.len()
-
+    report["volume_ratio"] = report["n_txns"] / normal_daily_volume
+    report["low_volume"] = report["volume_ratio"] < mcfg["min_volume_ratio"]
     for _, r in report.iterrows():
-        logger.info("day %2d | %7d txns | alert rate %6.3f%% | drifted: %s",
-                    r["day"], r["n_txns"], 100 * r["alert_rate"], r["drifted"] or "-")
+        logger.info("day %2d | %7d txns (%.0f%% of normal) | alert rate %6.3f%% | drifted: %s",
+                    r["day"], r["n_txns"], 100 * r["volume_ratio"], 100 * r["alert_rate"], r["drifted"] or "-")
 
     # 3. Retraining decision
     recent = report["n_drifted"].tail(mcfg["consecutive_days"])
@@ -88,16 +93,17 @@ def main() -> None:
         "model_version": meta["version"],
         "days_monitored": len(report),
         "days_with_drift": int((report["n_drifted"] > 0).sum()),
-        "most_drifted_features": report[REALISTIC_FEATURES].max().sort_values(ascending=False)
+        "most_drifted_features": report[monitored].max().sort_values(ascending=False)
                                        .head(5).round(3).to_dict(),
         "reference_alert_rate": reference_alert_rate,
         "production_alert_rate": float(production["alert"].mean()),
         "retrain_recommended": retrain,
+        "days_with_low_volume": report.loc[report["low_volume"], "day"].tolist(),
     }
 
     report.to_csv(report_dir / "drift_report.csv", index=False)
     (report_dir / "monitoring_summary.json").write_text(json.dumps(summary, indent=2))
-    plot_heatmap(report, REALISTIC_FEATURES, report_dir / "drift_heatmap.png")
+    plot_heatmap(report, monitored, report_dir / "drift_heatmap.png")
 
     logger.info("Alert rate: training %.3f%% -> production %.3f%%",
                 100 * summary["reference_alert_rate"], 100 * summary["production_alert_rate"])
