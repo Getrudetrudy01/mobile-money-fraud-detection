@@ -17,3 +17,9 @@ mlflow-ui:
 
 serve:
 	uvicorn src.serving.app:app --reload --port 8000
+
+docker-build:
+	docker build -t fraud-api .
+
+docker-run:
+	docker run -d --name fraud-api -p 8000:8000 fraud-api
