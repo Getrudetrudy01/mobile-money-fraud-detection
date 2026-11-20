@@ -3,3 +3,8 @@ data:
   clean_path: data/clean/transactions.parquet
   keep_types: ['TRANSFER', 'CASH_OUT']
   drop_columns: [isFlaggedFraud]
+
+features:
+  input_path: data/clean/transactions.parquet
+  output_path: data/features/features.parquet
+  night_hours: [0, 1, 2, 3, 4, 5, 6, 7]
