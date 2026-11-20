@@ -1,0 +1,5 @@
+data:
+  raw_path: data/raw/PS_20174392719_1491204439457_log.csv
+  clean_path: data/clean/transactions.parquet
+  keep_types: ['TRANSFER', 'CASH_OUT']
+  drop_columns: [isFlaggedFraud]
