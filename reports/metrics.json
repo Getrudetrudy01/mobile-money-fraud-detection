@@ -9,6 +9,14 @@
       "pr_auc": 0.9718504313617357,
       "roc_auc": 0.9857855361596011,
       "recall_at_0.1pct_fpr": 0.971571072319202
+    },
+    "decision": {
+      "threshold": 0.01,
+      "test_recall": 0.971571072319202,
+      "test_precision": 1.0,
+      "test_false_alarms": 0,
+      "test_missed_fraud_amount": 997300340.09375,
+      "test_total_cost": 997300340.09375
     }
   },
   "logistic_regression": {
@@ -21,6 +29,14 @@
       "pr_auc": 0.9932917571525623,
       "roc_auc": 0.9975457188660233,
       "recall_at_0.1pct_fpr": 0.9910224438902743
+    },
+    "decision": {
+      "threshold": 0.92,
+      "test_recall": 0.9670822942643391,
+      "test_precision": 1.0,
+      "test_false_alarms": 0,
+      "test_missed_fraud_amount": 67489822.29520416,
+      "test_total_cost": 67489822.29520416
     }
   },
   "lightgbm_realistic": {
@@ -33,6 +49,14 @@
       "pr_auc": 0.9995030720215226,
       "roc_auc": 0.999501248734292,
       "recall_at_0.1pct_fpr": 0.9995012468827931
+    },
+    "decision": {
+      "threshold": 0.34,
+      "test_recall": 0.9970074812967581,
+      "test_precision": 1.0,
+      "test_false_alarms": 0,
+      "test_missed_fraud_amount": 26078982.96875,
+      "test_total_cost": 26078982.96875
     }
   },
   "lightgbm_leaky": {
@@ -45,6 +69,14 @@
       "pr_auc": 0.9977726573365385,
       "roc_auc": 0.9988583946785894,
       "recall_at_0.1pct_fpr": 0.9977556109725686
+    },
+    "decision": {
+      "threshold": 0.01,
+      "test_recall": 0.9965087281795512,
+      "test_precision": 1.0,
+      "test_false_alarms": 0,
+      "test_missed_fraud_amount": 399045.09375,
+      "test_total_cost": 399045.09375
     }
   },
   "lightgbm_no_drain": {
@@ -57,6 +89,14 @@
       "pr_auc": 0.8446382709614508,
       "roc_auc": 0.9894871058734753,
       "recall_at_0.1pct_fpr": 0.6735660847880299
+    },
+    "decision": {
+      "threshold": 0.01,
+      "test_recall": 0.8877805486284289,
+      "test_precision": 0.4990187832912812,
+      "test_false_alarms": 3574,
+      "test_missed_fraud_amount": 93545153.19958496,
+      "test_total_cost": 97119153.19958496
     }
   }
 }

@@ -1,4 +1,4 @@
-.PHONY: data features train test
+.PHONY: data features train mlflow-ui test
 
 data:
 	python -m src.data.clean
@@ -11,3 +11,6 @@ train:
 
 test:
 	pytest -v
+
+mlflow-ui:
+	mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5000

@@ -27,3 +27,7 @@ training:
     metric: average_precision
     random_state: 42
     verbose: -1
+  false_alarm_cost: 1000
+  mlflow:
+    tracking_uri: sqlite:///mlflow.db
+    experiment: fraud-detection
