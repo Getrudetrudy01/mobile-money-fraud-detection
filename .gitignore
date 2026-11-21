@@ -231,7 +231,7 @@ data/**/*.zip
 # Secrets
 kaggle.json
 
-models/
+/models/
 
 # MLflow
 mlflow.db
