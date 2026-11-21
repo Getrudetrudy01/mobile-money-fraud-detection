@@ -8,3 +8,5 @@ extend-exclude = ["notebooks"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]   # style errors, real bugs, import order
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
