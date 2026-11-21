@@ -84,8 +84,13 @@ def main() -> None:
                     r["day"], r["n_txns"], 100 * r["volume_ratio"], 100 * r["alert_rate"], r["drifted"] or "-")
 
     # 3. Retraining decision
-    recent = report["n_drifted"].tail(mcfg["consecutive_days"])
-    retrain = bool((recent > 0).all())
+    k = mcfg["consecutive_days"]
+    if report["low_volume"].tail(k).all():
+        action = "INVESTIGATE_DATA_PIPELINE"   # data problem: don't touch the model
+    elif (report["n_drifted"].tail(k) > 0).all():
+        action = "RETRAIN"                     # data is healthy but has genuinely shifted
+    else:
+        action = "OK"
     reference_alert_rate = float(
         (model.predict_proba(reference[REALISTIC_FEATURES])[:, 1] >= meta["threshold"]).mean())
 
@@ -97,7 +102,7 @@ def main() -> None:
                                        .head(5).round(3).to_dict(),
         "reference_alert_rate": reference_alert_rate,
         "production_alert_rate": float(production["alert"].mean()),
-        "retrain_recommended": retrain,
+        "recommended_action": action,
         "days_with_low_volume": report.loc[report["low_volume"], "day"].tolist(),
     }
 
@@ -107,7 +112,7 @@ def main() -> None:
 
     logger.info("Alert rate: training %.3f%% -> production %.3f%%",
                 100 * summary["reference_alert_rate"], 100 * summary["production_alert_rate"])
-    logger.info("RETRAIN RECOMMENDED: %s", retrain)
+    logger.info("RECOMMENDED ACTION: %s", action)
 
 
 if __name__ == "__main__":

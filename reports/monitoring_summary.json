@@ -11,7 +11,7 @@
   },
   "reference_alert_rate": 0.00133,
   "production_alert_rate": 0.009797170632013076,
-  "retrain_recommended": true,
+  "recommended_action": "INVESTIGATE_DATA_PIPELINE",
   "days_with_low_volume": [
     15,
     17,
