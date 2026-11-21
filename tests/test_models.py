@@ -5,7 +5,6 @@ from src.models.split import time_split
 from src.models.threshold import best_threshold, cost_curve
 
 
-
 def test_time_split_is_ordered_and_complete():
     df = pd.DataFrame({"step": list(range(1, 101))})
     train, val, test = time_split(df, 0.70, 0.15)

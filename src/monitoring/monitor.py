@@ -81,7 +81,8 @@ def main() -> None:
     report["low_volume"] = report["volume_ratio"] < mcfg["min_volume_ratio"]
     for _, r in report.iterrows():
         logger.info("day %2d | %7d txns (%.0f%% of normal) | alert rate %6.3f%% | drifted: %s",
-                    r["day"], r["n_txns"], 100 * r["volume_ratio"], 100 * r["alert_rate"], r["drifted"] or "-")
+                    r["day"], r["n_txns"], 100 * r["volume_ratio"],
+                    100 * r["alert_rate"], r["drifted"] or "-")
 
     # 3. Retraining decision
     k = mcfg["consecutive_days"]

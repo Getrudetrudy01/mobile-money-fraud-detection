@@ -168,6 +168,7 @@ rich==15.0.0
 rich-toolkit==0.20.6
 rignore==0.8.1
 rpds-py==2026.9.1
+ruff==0.17.6
 scikit-learn==1.9.1
 scipy==1.18.1
 seaborn==0.13.2
