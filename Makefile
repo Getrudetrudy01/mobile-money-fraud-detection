@@ -1,4 +1,4 @@
-.PHONY: data features train mlflow-ui serve monitor dashboard test
+.PHONY: data features train test check monitor serve dashboard mlflow-ui docker-build docker-run
 
 data:
 	python -m src.data.clean
@@ -9,23 +9,26 @@ features:
 train:
 	python -m src.models.train
 
-monitor:
-	python -m src.monitoring.monitor
-
 test:
 	pytest -v
 
-mlflow-ui:
-	mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5000
+check:
+	ruff check . && pytest
+
+monitor:
+	python -m src.monitoring.monitor
 
 serve:
 	uvicorn src.serving.app:app --reload --port 8000
+
+dashboard:
+	streamlit run src/dashboard/app.py --server.port 8501
+
+mlflow-ui:
+	mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5000
 
 docker-build:
 	docker build -t fraud-api .
 
 docker-run:
 	docker run -d --name fraud-api -p 8000:8000 fraud-api
-
-dashboard:
-	streamlit run src/dashboard/app.py --server.port 8501
