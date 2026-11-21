@@ -1,4 +1,4 @@
-.PHONY: data features train mlflow-ui serve monitor test
+.PHONY: data features train mlflow-ui serve monitor dashboard test
 
 data:
 	python -m src.data.clean
@@ -26,3 +26,6 @@ docker-build:
 
 docker-run:
 	docker run -d --name fraud-api -p 8000:8000 fraud-api
+
+dashboard:
+	streamlit run src/dashboard/app.py --server.port 8501
