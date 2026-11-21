@@ -225,10 +225,6 @@ make check       # lint + tests
 
 ---
 
-## Author
 
-**Getrude Makumator**: Computer Science graduate (UCC, 2024), working in payments operations and compliance at a Bank of Ghana-licensed payment service provider.
-
-[LinkedIn](https://www.linkedin.com/in/getrude-makumator-g22) · getrudemawusimakumator@gmail.com
 
 *Dataset: E. A. Lopez-Rojas, A. Elmir, S. Axelsson, "PaySim: A financial mobile money simulator for fraud detection," 28th European Modeling and Simulation Symposium (EMSS), 2016.*
