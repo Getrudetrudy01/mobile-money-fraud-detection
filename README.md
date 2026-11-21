@@ -1,23 +1,34 @@
-# Mobile Money Fraud Detection: an end-to-end ML system
+# 🛡️ Mobile Money Fraud Detection
 
 [![CI](https://github.com/Getrudetrudy01/mobile-money-fraud-detection/actions/workflows/ci.yml/badge.svg)](https://github.com/Getrudetrudy01/mobile-money-fraud-detection/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.14-blue)
+![LightGBM](https://img.shields.io/badge/model-LightGBM-green)
+![FastAPI](https://img.shields.io/badge/API-FastAPI-009688)
+![Streamlit](https://img.shields.io/badge/dashboard-Streamlit-FF4B4B)
 
-A production-style machine learning system that detects fraudulent mobile money transactions. It covers the whole lifecycle: validated data pipeline, leak-free feature engineering, model training with experiment tracking, a cost-based decision threshold, a real-time scoring API in Docker, drift monitoring, and CI.
+An end-to-end machine learning system that flags fraudulent mobile money transactions in real time. It goes from raw data to a monitored, containerised scoring service, with an analyst dashboard on top.
 
-I work in operations at a licensed payment service provider, so I built this the way I'd want a fraud system at work to behave. That means being honest about what the numbers really mean, choosing alert thresholds by business cost, and checking data health before blaming the model.
+![Analyst dashboard](reports/dashboard.png)
+
+I work in operations at a Bank of Ghana-licensed payment service provider, and I built this the way I'd want a fraud system at work to behave:
+- alert thresholds set by **business cost**, not by default
+- every alert **explained** to the analyst reviewing it
+- **data health checked before the model is blamed**
+- an honest account of what the scores do and don't prove
 
 ---
 
-## Key findings
+## At a glance
 
 | | |
 |---|---|
-| **Best model** | LightGBM: test PR-AUC **0.9995**, catching 99.7% of fraud with zero false alarms at the cost-optimal threshold |
-| **Why that number is too good** | One feature (`takes_full_balance`) provides **95%** of the model's gain. It mirrors how PaySim *generates* fraud, so the score is a ceiling, not a real-world estimate |
-| **More realistic estimate** | Without that shortcut (ablation): PR-AUC **0.84**, catching **67%** of fraud at a 0.1% false-alarm rate |
-| **Why PR-AUC, not ROC-AUC** | ROC-AUC stayed at **0.99** for both models. Only PR-AUC showed the real drop, so ROC-AUC is misleading for rare events |
-| **Counting money vs. cases** | A one-line rule catches 97% of fraud *cases* but misses **~997M** in fraud *value*; LightGBM misses ~26M. The rule fails on exactly the largest frauds |
-| **Monitoring** | The drift monitor detected a ~90% drop in transaction volume and recommended **investigating the data pipeline instead of retraining** |
+| **Data** | 6.36M simulated mobile money transactions (PaySim); 0.13% fraud |
+| **Best model** | LightGBM: test PR-AUC **0.9995**, catching 99.7% of fraud with zero false alarms |
+| **Honest estimate** | **0.84 PR-AUC / 67% recall at 0.1% false alarms** once PaySim's built-in fraud shortcut is removed |
+| **Serving** | FastAPI + Docker, with per-prediction explanations (SHAP) |
+| **Dashboard** | Streamlit: live scoring, model comparison, monitoring |
+| **Monitoring** | PSI drift, alert rate and volume checks, with a recommended action |
+| **Quality** | 21 tests, Ruff linting, GitHub Actions CI on every push |
 
 ---
 
@@ -25,99 +36,82 @@ I work in operations at a licensed payment service provider, so I built this the
 
 ```mermaid
 flowchart LR
-    A[Raw PaySim CSV] --> B[Validate<br/>pandera schema]
+    A[Raw CSV] --> B[Validate<br/>pandera]
     B --> C[Clean<br/>Parquet]
-    C --> D[Features<br/>leak-free]
-    D --> E[Train & evaluate<br/>MLflow tracking]
-    E --> F[Model +<br/>cost-based threshold]
-    F --> G[FastAPI /score<br/>Docker]
-    D --> H[Drift monitor<br/>PSI + volume + alert rate]
-    F --> H
+    C --> D[Leak-free<br/>features]
+    D --> E[Train + evaluate<br/>MLflow]
+    E --> F[Model +<br/>cost threshold]
+    F --> G[FastAPI<br/>in Docker]
+    G --> H[Streamlit<br/>dashboard]
+    D --> I[Drift<br/>monitor]
+    F --> I
 ```
 
-Every stage is a script run with one command (`make data`, `make features`, `make train`, `make serve`, `make monitor`). Each stage reads from one data layer and writes to the next, and raw data is never modified.
+Each stage is one command (`make data`, `make features`, `make train`, …). Each stage reads from one data layer and writes to the next, and raw data is never modified. The dashboard calls the API instead of loading the model itself, so every app uses the same model.
 
 ---
 
-## Data
+## Results
 
-[PaySim](https://www.kaggle.com/datasets/ealaxi/paysim1) is a synthetic dataset of **6.36M mobile money transactions** over 31 days (743 hours), simulated from real transaction logs of an African mobile money service (CC BY-SA 4.0).
-
-What exploratory analysis showed ([`notebooks/01_eda.ipynb`](notebooks/01_eda.ipynb)):
-- **Fraud is rare:** 0.129%. A model that always says "not fraud" would be 99.87% accurate, so accuracy is useless here.
-- **Fraud only occurs in `TRANSFER` and `CASH_OUT`.** It's a two-step scheme: move the victim's money to a mule account, then cash it out. Modelling is restricted to these types (2.77M rows, 0.30% fraud).
-- **The existing rule-based flag (`isFlaggedFraud`) catches almost nothing:** 16 of 8,213 frauds.
-- **97.7% of frauds drain the sender's entire balance.**
-- **Fraud rate peaks at 2–7 a.m.**, mainly because legitimate volume drops overnight while fraud continues.
-
----
-
-## Pipeline and features
-
-**Validation:** a [pandera](https://pandera.readthedocs.io/) schema checks types, ranges, allowed transaction types and ID formats. If upstream data changes shape, the pipeline stops loudly instead of training on bad data.
-
-**Leakage prevention:** a real-time fraud model scores a transaction *before* approving it, so features may only use information available at that moment.
-- ❌ Post-transaction balances (`newbalanceOrig`, `newbalanceDest`) are excluded from the realistic model, and the API doesn't even accept them.
-- ✅ The "drains the account" signal is rebuilt from pre-transaction data: `amount / oldbalanceOrg`.
-- ✅ Receiver-history features (`dest_prior_txn_count`, `dest_prior_amount_sum`, `dest_hours_since_last`) use **only earlier hours**. Transactions within the same hour have no reliable order, so they never count as each other's history. A unit test enforces this.
-
-**Why receiver history and not sender history:** checking the data showed almost every sender appears only once (a PaySim limitation), but receivers repeat. Many incoming transfers to one account is also a classic mule-account signal.
-
----
-
-## Modelling and evaluation
-
-**Time-based split:** train on the earliest hours, validate on the next, test on the latest. A random split would let the model learn from the future.
-
-| Split | Hours | Rows | Fraud rate |
-|---|---|---|---|
-| Train | 1–323 | 1.95M | 0.187% |
-| Validation | 324–377 | 410k | 0.136% |
-| Test | 378–743 | 408k | **0.983%** |
-
-The test period has 5× more fraud because legitimate volume collapses late in the simulation. This is real distribution shift, and it means test and validation scores aren't directly comparable.
-
-**Results on the test set:**
+**Test set**, using a time-based split: trained on the earliest hours and tested on the latest, never on data from the future.
 
 | Model | PR-AUC | ROC-AUC | Recall @ 0.1% FPR | Fraud value missed |
 |---|---|---|---|---|
 | Rule: flag if amount = full balance | 0.972 | 0.986 | 97.2% | ~997M |
 | Logistic regression | 0.993 | 0.998 | 99.1% | ~67M |
-| **LightGBM (realistic)** | **0.9995** | 0.9995 | **99.5%** | **~26M** |
-| LightGBM (leaky: post-transaction balances) | 0.998 | 0.999 | 99.8% | ~0.4M |
-| LightGBM (no drain features: ablation) | 0.845 | 0.990 | 67.4% | n/a |
+| **LightGBM** | **0.9995** | 0.9995 | **99.5%** | **~26M** |
+| LightGBM, *without* drain features (ablation) | 0.845 | 0.990 | 67.4% | n/a |
 
-**How I read these results:**
-1. **The headline score reflects the simulator.** Feature importance shows `takes_full_balance` carries 95% of the gain. PaySim generates fraud by emptying accounts, and the model learned that rule.
-2. **The ablation is the more honest number.** Without the drain features, the model still catches two-thirds of fraud at a strict false-alarm rate, using amount, balances, time of day and receiver history. Trees partly rebuild the drain signal from `amount` and `oldbalanceOrg`, which are its top features.
-3. **The leakage experiment didn't show inflation here,** because realistic features already separate the classes almost perfectly. With leaky features, early stopping kept a single tree. On real data, the gap would be large.
-4. **ROC-AUC hides problems on rare events:** 0.99 in both the full and the ablated model. PR-AUC showed the real difference.
+### What these numbers really mean
 
-All runs, parameters, metrics, feature importances and models are tracked in **MLflow** (`make mlflow-ui`).
+**1. The top score mostly reflects how the simulator works.** One feature, `takes_full_balance`, provides **95%** of the model's gain. PaySim generates fraud by emptying the victim's account, and the model learned that rule. A near-perfect score here is a ceiling, not a real-world estimate.
 
----
+**2. The ablation is the honest number.** With the drain features removed, the model still catches two-thirds of fraud at a strict false-alarm rate. It does this using the amount, balances, time of day and the receiving account's history.
 
-## Choosing the alert threshold by cost
+**3. ROC-AUC hides the drop.** It stayed at **0.99** for both models. Only PR-AUC showed the real difference, which is why PR-AUC is the main metric for rare events like fraud.
 
-A model outputs probabilities, but operations needs a yes/no decision. The threshold is chosen by **business cost**, not by default (0.5):
-
-- **Missed fraud** costs the transaction amount.
-- **False alarm** costs a fixed amount for review time and customer friction (1,000 units, configurable).
-
-The threshold is chosen on the validation set and reported once on the test set.
-
-- **Realistic model:** threshold 0.34 → 99.7% of fraud caught, 0 false alarms.
-- **Ablation model:** the threshold drops to the lowest value tested. Because a missed fraud averages ~1.5M, the cost model accepts roughly one false alarm per fraud caught (~240 alerts/day). **In practice I'd add an alert budget** matched to the review team's capacity.
+**4. Counting money tells a different story from counting cases.** The one-line rule catches 97% of fraud *cases* but misses **~997M** in fraud *value*, about 38× more than LightGBM. PaySim caps single transfers, so large accounts are emptied in several chunks. None of the chunks equals the full balance, so the rule misses exactly the biggest frauds.
 
 ---
 
-## Real-time scoring API
+## Key design decisions
 
-FastAPI service with input validation (Pydantic), per-prediction explanations (LightGBM SHAP contributions) and a health check. The API **reuses the same feature functions as training** to prevent training-serving skew.
+### No data leakage
+A real-time model scores a transaction **before** it's approved, so features may only use information available at that moment.
+- Post-transaction balances are excluded, and the API doesn't even accept them.
+- "Drains the account" is rebuilt from pre-transaction data: `amount / oldbalanceOrg`.
+- Receiving-account history uses **only earlier hours**, and a unit test enforces this.
 
-```bash
-make serve          # or: make docker-build && make docker-run
-```
+### Thresholds set by cost
+The model outputs a probability, but operations needs a yes/no answer. The threshold minimises total cost:
+- **a missed fraud** costs the transaction amount
+- **a false alarm** costs a fixed review cost (configurable)
+
+The threshold is chosen on validation data and reported once on test data. For the main model, the best threshold is **0.34**: 99.7% of fraud caught, zero false alarms.
+
+### Monitoring that checks data health first
+`make monitor` treats the latest period as "production" and checks it day by day:
+- **feature drift:** Population Stability Index (PSI), implemented from scratch
+- **alert rate:** how often the model flags transactions
+- **volume:** transactions per day against normal
+
+![Drift heatmap](reports/drift_heatmap.png)
+
+From day 17, volume fell to **0–18% of normal** and the alert rate rose from 0.13% to 0.98%. The model wasn't failing: its alerts tracked the real fraud rate. Legitimate traffic had disappeared.
+
+My first monitor recommended **retraining**. But retraining on data with missing legitimate transactions would teach the model that most transactions are fraud. The monitor now checks data health first and recommends **`INVESTIGATE_DATA_PIPELINE`**, the response an operations team would give.
+
+---
+
+## The dashboard
+
+`make dashboard` (with `make serve` running) opens a Streamlit app at `localhost:8501`:
+
+- **Score a transaction:** enter the details and get a fraud probability, a decision, and the top factors behind it
+- **Model results:** all five models side by side, including fraud value missed
+- **Monitoring:** daily volume, alert rate, drift heatmap and the recommended action
+
+## The API
 
 ```bash
 curl -X POST localhost:8000/score -H "Content-Type: application/json" \
@@ -129,7 +123,6 @@ curl -X POST localhost:8000/score -H "Content-Type: application/json" \
   "fraud_probability": 1.0,
   "is_fraud": true,
   "threshold": 0.34,
-  "model_version": "20261120-151850",
   "top_factors": [
     {"feature": "takes_full_balance", "contribution": 34.27},
     {"feature": "oldbalanceDest", "contribution": -1.07},
@@ -138,93 +131,70 @@ curl -X POST localhost:8000/score -H "Content-Type: application/json" \
 }
 ```
 
-Interactive docs are at `/docs`. Invalid input (negative amounts, unsupported transaction types) is rejected with a `422` before reaching the model.
-
-**Docker image:** `python:3.14-slim`, serving-only dependencies pinned to training versions, runs as a **non-root user**, with a built-in healthcheck.
-
----
-
-## Monitoring
-
-`make monitor` treats the test period as "production" and checks each day against recent known-good data:
-
-- **Data drift:** Population Stability Index (PSI) per feature per day, implemented from scratch. Binary flags and missing values are handled explicitly.
-- **Prediction drift:** the daily alert rate.
-- **Data health:** daily volume against normal.
-
-![Feature drift heatmap](reports/drift_heatmap.png)
-
-**What it found:** from day 17, transaction volume fell to 0–18% of normal and the alert rate rose from 0.13% to 0.98%. The model wasn't failing: its alerts tracked the real fraud rate. The legitimate traffic had disappeared.
-
-**How the monitor evolved:**
-- My first version recommended **retraining**.
-- `day_of_week` flagged every day. That was a false alarm, because a single day can't match a 7-day distribution.
-- `dest_hours_since_last` drifts structurally, because it grows over time.
-- Most importantly, retraining on data with missing legitimate traffic would teach the model that most transactions are fraud.
-
-The monitor now **checks data health before model health** and returns `INVESTIGATE_DATA_PIPELINE`.
+- Interactive docs at `/docs`.
+- Invalid input is rejected with a `422` before it reaches the model.
+- The API reuses the exact feature code from training, which prevents training-serving skew.
+- The Docker image is slim, runs as a **non-root user** and has a built-in healthcheck.
 
 ---
 
-## Engineering
-
-- **21 tests** (pytest): validation rules, cleaning, leak-free history features, time split, metrics, cost threshold, API behaviour, PSI edge cases. API tests skip automatically when no trained model exists, so CI runs without the data.
-- **CI** (GitHub Actions): Ruff linting and the full test suite on every push.
-- **Configuration** in `configs/config.yaml`; no hard-coded paths or parameters.
-- **Reproducible environment:** pinned requirements, plus a dev container for GitHub Codespaces.
-
-```
-├── configs/config.yaml        # all paths, parameters, costs, monitoring rules
-├── notebooks/01_eda.ipynb     # exploratory analysis and findings
-├── src/
-│   ├── data/                  # schema + validation + cleaning
-│   ├── features/              # leak-free feature engineering
-│   ├── models/                # split, training, evaluation, cost threshold
-│   ├── serving/               # FastAPI app + request/response schemas
-│   └── monitoring/            # PSI drift + daily monitoring job
-├── tests/                     # 21 unit and API tests
-├── Dockerfile                 # serving image
-├── Makefile                   # one command per pipeline stage
-└── .github/workflows/ci.yml   # lint + tests on every push
-```
-
----
-
-## How to run
+## Quick start
 
 ```bash
 pip install -r requirements.txt
-# Download PaySim from Kaggle into data/raw/ (requires a Kaggle API token)
-kaggle datasets download -d ealaxi/paysim1 -p data/raw && unzip data/raw/paysim1.zip -d data/raw
 
-make data        # validate + clean          -> data/clean/
-make features    # leak-free features        -> data/features/
-make train       # 5 models, MLflow logging  -> models/, reports/metrics.json
-make mlflow-ui   # compare experiments at localhost:5000
-make serve       # scoring API at localhost:8000/docs
-make monitor     # drift report              -> reports/
+# Download PaySim into data/raw/ (needs a Kaggle API token)
+kaggle datasets download -d ealaxi/paysim1 -p data/raw
+unzip data/raw/paysim1.zip -d data/raw
+
+make data        # validate + clean
+make features    # build leak-free features
+make train       # train 5 models, log to MLflow
+make serve       # API at localhost:8000/docs
+make dashboard   # dashboard at localhost:8501 (second terminal)
+make monitor     # drift report in reports/
 make check       # lint + tests
+```
+
+Other commands: `make mlflow-ui` (experiment tracking at `localhost:5000`), `make docker-build` and `make docker-run`.
+
+---
+
+## Project structure
+
+```
+├── configs/config.yaml       # paths, model settings, costs, monitoring rules
+├── notebooks/01_eda.ipynb    # exploratory analysis and findings
+├── src/
+│   ├── data/                 # schema validation + cleaning
+│   ├── features/             # leak-free feature engineering
+│   ├── models/               # time split, training, metrics, cost threshold
+│   ├── serving/              # FastAPI app + request/response schemas
+│   ├── monitoring/           # PSI drift + daily monitoring job
+│   └── dashboard/            # Streamlit analyst dashboard
+├── tests/                    # 21 unit and API tests
+├── Dockerfile                # serving image
+├── Makefile                  # one command per stage
+└── .github/workflows/ci.yml  # lint + tests on every push
 ```
 
 ---
 
-## Limitations and future work
+## Limitations
 
-**Limitations**
-- **Synthetic data.** PaySim's fraud is near-deterministic, so scores are far above what real systems achieve. The ablation result is the more realistic estimate.
-- **Single-transaction senders.** Almost every sender appears once, so sender behaviour (velocity, typical amounts) can't be modelled.
-- **Receiver history is passed in by the caller.** In production, it would come from a feature store updated in real time.
-- **Overconfident probabilities.** The model outputs 1.0 for obvious fraud; it hasn't been calibrated.
+- **Synthetic data.** PaySim's fraud follows an almost fixed pattern, so scores are far higher than a real system would achieve.
+- **Senders appear only once.** Sender behaviour (spending patterns, transaction speed) can't be learned.
+- **Receiver history is supplied by the caller.** In production it would come from a feature store.
+- **Probabilities aren't calibrated.** The model says 100% for obvious cases, which is overconfident.
 
-**Future work**
-- Probability calibration (Platt scaling or isotonic regression)
-- An alert budget: choose the threshold under a daily review-capacity limit
-- Rolling-window reference for structurally drifting features
-- Load the approved model from the MLflow Model Registry at API startup instead of baking it into the image
-- Test on a real or more realistic fraud dataset
+## Next steps
+
+- Calibrate probabilities so "80% likely" really means 80%
+- Add an **alert budget**: choose the threshold within the review team's daily capacity
+- Serve the approved model from the MLflow Model Registry instead of baking it into the Docker image
+- Validate on a more realistic fraud dataset
 
 ---
 
 
-
-*Dataset: E. A. Lopez-Rojas, A. Elmir, S. Axelsson, "PaySim: A financial mobile money simulator for fraud detection," 28th European Modeling and Simulation Symposium (EMSS), 2016.*
+<sub>Dataset: E. A. Lopez-Rojas, A. Elmir, S. Axelsson, "PaySim: A financial mobile money simulator for fraud detection," EMSS 2016. Licensed CC BY-SA 4.0.</sub>
