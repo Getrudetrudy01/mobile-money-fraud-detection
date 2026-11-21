@@ -4,10 +4,9 @@ import logging
 import joblib
 import lightgbm as lgb
 import mlflow
-import mlflow.sklearn
-import numpy as np
-import pandas as pd
 import mlflow.lightgbm
+import mlflow.sklearn
+import pandas as pd
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import make_pipeline
